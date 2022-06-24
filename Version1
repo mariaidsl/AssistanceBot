@@ -1,0 +1,62 @@
+from config import * #importamos el token
+import telebot # para manejar la API de Telegram 
+from telebot.types import ReplyKeyboardMarkup #pare crear botones
+from telebot.types import ForceReply #para citar un mensae
+
+#instaciacomos el bot de Telegram
+bot = telebot.TeleBot(TELEGRAM_TOKEN)
+texto =""
+
+#responde el comando /start 
+@bot.message_handler(commands=["start","Volver"])
+def cmd_start(message):
+#Da la bienvenida al usuario.
+    
+    #definimos dos botones
+    markup = ReplyKeyboardMarkup(one_time_keyboard=True, input_field_placeholder = "Pulsa un botón")
+    markup.add("/IniciarAsist", "/DarAsist")
+    bot.reply_to(message, "Bienvenido, soy el bot de Asistencia. ¿En qué puedo ayudarte?\nPor favor, pulsa un botón para elegir que es lo que desea hacer.\n# Si desea Iniciar Asistencia, pulse el botón IniciarAsist.\n# Si desea Dar Asistencia en Clase, por favor pulse el botón DarAsist.\n", reply_markup=markup)
+    
+@bot.message_handler(commands=["IniciarAsist"])
+def cmd_IniciarAsist(message):
+    markup = ReplyKeyboardMarkup(one_time_keyboard=True, input_field_placeholder = "Pulsa un botón")
+    bot.send_message(message.chat.id, "Te envío el formulario para obtener la ubicación de los integrantes de la clase. Por favor, realiza una copia del mismo y envíame el link para poder enviarselos a los alumnos cuando lo soliciten.\nSi ya cuenta con una copia hecha, desistime este paso.\nPresione el botón Continuar para proceder con el envío del formulario o Cancelar en caso de que desee cancelar la operación.")
+    markup.add("Continuar","Cancelar")
+    msg1 = bot.send_message(message.chat.id, "https://docs.google.com/forms/d/16SFY2oBE_2P-3MJJfCoq5WGGwGY9wVwbheARJ9jGW6o/edit", reply_markup=markup) 
+    bot.register_next_step_handler(msg1, cmd_enviar)
+
+@bot.message_handler(commands=["DarAsist"])
+def cmd_DarAsist(message):
+     bot.send_message(message.chat.id, "Hola! Te envío el formulario de asistencia, por favor ingresa y carga todos los campos para poder dar tu presente en clase. En caso de no existir una toma de asistencia activa, no se enviará ningun link.")
+     bot.send_message(message.chat.id, texto)
+     bot.send_message(message.chat.id, "Muchas gracias por usar Bot Asist")
+
+@bot.message_handler(commands=['enviar'])
+def cmd_enviar(message):
+#registrar el formulario
+    #markup = ForceReply()
+   if (message.text == "Continuar"):
+      markup = ForceReply()
+      msg2 = bot.send_message(message.chat.id, "Envíame el formulario", reply_markup=markup)
+      bot.register_next_step_handler(msg2, gracias)
+   else:
+      bot.send_message(message.chat.id, "La operación se canceló satisfactoriamente. Para volver al menú principal, haz click en el siguiente comando /Volver")
+    
+def gracias(message):
+    global texto
+    texto = message.text
+    if "docs.google.com/forms" in texto:
+       bot.send_message(message.chat.id, "Muchas gracias por usar Bot Asist. Estoy listo para la toma de asistencia.-")
+       bot.send_message(message.chat.id, "Para volver al menú principal, haz click en el siguiente comando /Volver")
+    else:
+       global texo
+       texto = ""
+       bot.send_message(message.chat.id, "Enlace no válido. Por favor asegurate de enviar el link de un formulario de Google.")
+       bot.send_message(message.chat.id, "Para volver al menú principal, haz click en el siguiente comando /Volver")
+    
+    
+if __name__ == '__main__':
+    print('Iniciando el bot')
+    bot.infinity_polling()
+    print('Fin')
+    

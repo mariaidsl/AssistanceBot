@@ -1,0 +1,160 @@
+from config import * #Importamos el token
+import telebot #Para manejar la API de Telegram para Python.
+from telebot.types import ReplyKeyboardMarkup #Para crear botones.
+#from telebot.types import
+from telebot.types import ForceReply #Para citar un mensaje.
+from datetime import date #Para el manejo de la hora actual y demás funcionalidades relacionadas. 
+from datetime import datetime #Idem Anterior.
+import pandas as pd #Para el uso y manejo de dataframes.
+import files #Para importar archivos.
+from geopy.distance import geodesic #Para calcular distancia entre dos ubicaciones (latitud, longitud).
+
+
+#Instaciamos el bot de Telegram
+bot = telebot.TeleBot(TELEGRAM_TOKEN)
+#Instaciamos las variables locales que se usarán en el desarrollo del bot.
+texto =""
+today = date.today
+now = datetime.now()
+band = 0
+id = 0
+codigo = ""
+lati = ""
+longi = ""
+
+#responde al comando /start /Volver
+@bot.message_handler(commands=["start","Volver"])
+def cmd_start(message):
+#Da la bienvenida al usuario.
+    #defino dos botones
+    markup = ReplyKeyboardMarkup(one_time_keyboard=True, input_field_placeholder = "Pulsa un botón")
+    markup.add("/IniciarAsist", "/DarAsist")
+    bot.reply_to(message, "Bienvenido, soy el bot de Asistencia. ¿En qué puedo ayudarte?\nPor favor, pulsa un botón para elegir que es lo que desea hacer.\n# Si desea Iniciar Asistencia, pulse el botón IniciarAsist.\n# Si desea Dar Asistencia en Clase, por favor pulse el botón DarAsist.\n", reply_markup=markup)
+ 
+#responde al comando /IniciarAsist    
+@bot.message_handler(commands=["IniciarAsist"])
+def cmd_IniciarAsist(message):
+#Explica el procedimiento para empezar la toma de asistencia y le da la opción al profesor de cancelar la operación.
+       #verifico que nadie haya empezado una toma de asistencia previamente
+     global band
+     if(band==0):
+       bot.send_message(message.chat.id, "Para empezar la toma de asistencia, es necesario que generes una abreviatura alfabética del nombre de la clase y se los proporciones a los alumnos. Con eso, deberán completar el Campo CLASE del formulario. Ten en cuenta que una vez que des por finalizado el proceso de toma de asistencia, serás la única persona que podrá descargar el archivo de asistencia generado.")
+       #definimos dos botones
+       markup = ReplyKeyboardMarkup(one_time_keyboard=True, input_field_placeholder = "Pulsa un botón")
+       markup.add("SI", "NO")
+       msg1 = bot.reply_to(message, "Deseas continuar? Pulsa un botón.", reply_markup=markup)
+       bot.register_next_step_handler(msg1, sino) #defino el siguiente paso del bot.
+     else:
+       bot.send_message(message.chat.id, "ERROR. La toma de asistencia ya fue comenzada por otro responsable de la cátedra. Para volver al menú principal, haz click en el comando /Volver")
+    
+def sino(message):
+    global id
+    id = message.chat.id #capturo el id del chat del profesor.
+    if (message.text == "SI"):
+      msg2 = bot.send_message(message.chat.id,"A continuación envíame tu ubicación para que al final de la toma de asistencia, pueda compararla con los que completaron el formulario, asi evitamos falsos presentes en clase.")
+      bot.register_next_step_handler(msg2, paso1) #defino el siguiente paso del bot.
+    else:
+      cmd_Cancelar(message)
+
+#defino paso1        
+def paso1(message):
+    #variables locales
+    global lati
+    lati = message.location.latitude
+    global longi
+    longi = message.location.longitude
+    print(lati)
+    print(longi)
+    global texto
+    texto = (lati , longi)
+    #pruebas de visualización en consola.
+    #print(texto)
+    #print(geodesic(deflat,texto).meters)
+    #defino dos botones
+    markup = ReplyKeyboardMarkup(one_time_keyboard=True, input_field_placeholder = "Pulsa un botón")
+    markup.add("/Continuar", "/Cancelar")
+    bot.reply_to(message, "Ya tengo tu ubicación. Por último, deberás enviarme el código de la clase que le proporcionaste a tus alumnos. Deseas Continuar o Cancelar? " , reply_markup=markup)
+
+#defino comando /Continuar    
+@bot.message_handler(commands=["Continuar"])    
+def cmd_Continuar(message):
+    msg3 = bot.send_message(message.chat.id, "Envíame el código de la clase")
+    bot.register_next_step_handler(msg3,paso2) 
+    
+
+#defino paso2        
+def paso2(message):
+     #Guardo el ID del chat del profesor y el codigo de clase. 
+     #Cambio el valor de la bandera.
+     global id
+     global codigo
+     global band 
+     band = 1
+     id = message.chat.id
+     codigo = message.text
+     print(codigo)
+     bot.send_message(message.chat.id, "Muchas gracias por usar Bot Asist. Cuando desees dar por finalizado el proceso, solo ejecuta el comando /DescargarAsist, para poder asi, enviarte un archivo con todos las respuestas de asistencia registradas hasta ese momento.")
+     bot.send_message(message.chat.id, "Ya puedes decirles a tus alumnos que utilicen Bot Asist para empezar con la toma de asistencia virtual.")
+
+
+#responde al comando /cancelar.
+@bot.message_handler(commands=["Cancelar"])
+def cmd_Cancelar(message):
+    bot.send_message(message.chat.id, "La operación se canceló satisfactoriamente. Si deseas volver al menú principal, haz click en el comando /Volver")
+    
+ 
+#defino el comando /DarAsist   
+#envia el formulario de asistencia a los alumnos para que accedan a él y lo completen.
+@bot.message_handler(commands=["DarAsist"])
+def cmd_DarAsist(message):
+     bot.send_message(message.chat.id, "Hola! Te envío el formulario de asistencia, por favor ingresa y carga todos tus datos en los campos solicitados. Al finalizar la carga del formulario, permite la solicitud de ubicación para poder dar tu presente en clase.")
+     bot.send_message(message.chat.id, "https://forms.gle/8eAeceomZdjKPJE56")
+     bot.send_message(message.chat.id, "ACUERDATE de completar el campo CLASE, con el código proporcionado por el/la profesor/a en clase.")
+     bot.send_message(message.chat.id, "Muchas gracias por usar Bot Asist")
+
+#defino el comando /DescargarAsist
+@bot.message_handler(commands=["DescargarAsist"])
+def cmd_DescargarAsist(message):
+       #creación de un dataframe apartir de la obteción de las respuestas de un formulario de Google.
+       #url es el link de la publicación en la web de las Hojas de Respuestas como archivo csv.
+       url = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSwKcRUXKcfokR1YaqkivPuZF6R14tCWdMx1WjNI61ifwXeLV_dv4Gw4p6W3uWc739tUMrt0rZyNs4h/pub?gid=1261293380&single=true&output=csv'
+       df = pd.read_csv(url) #creación del dataframe.
+       #variables locales que utilizaré
+       global id
+       global codigo
+       global texto
+       if(message.chat.id == id): #compruebo si la persona que esta solicitando descargar la asistencia es el profesor.
+          global now 
+          now = datetime.now() #obtengo la fecha actual
+          format = now.strftime('%d/%-m/%Y') #cambio el formato de la fecha. 
+          #print(format)
+          #print(df)
+          df2=df[(df['Fecha ']==format)&(df['Clase']==codigo)] #creo un segundo dataframe apartir de un filtrado por fecha y codigo de clase del primero, esto es para evitar otras respuestas que no sean de la fecha o de la misma clasae en si. 
+          #elimino todos los registros que tenga vacio el campo "Localización"
+          df2 = df2.dropna(subset=["Localizacion"])
+          #df2 = df2.head(len(df2))
+          #print(df2)
+          #Restablezco el indice del dataframe2 debido a la eliminación de arriba. 
+          df2.reset_index(drop=True, inplace=True)
+          #Controlamos que la distancia del alumno con la del profesor, no sea superior a los 75 metros.
+          for i in df2.index: #recorro todas las filas de la columna localizacion.
+             if((geodesic((df2.loc[i, "Localizacion"]),texto).km) >= 8): #8 km lo saque en base a un calculo porcentual en cuando a la diferencia de localización entre GOOGLE FORMS y TELEGRAM. Debido a la diferencia de dígitos y la diferencia grande precesión. 
+                   df2 = df2.drop(df2.index[i])   #elimino el registro que no cumpla la condición.
+          
+          df2 = df2.drop(columns = ["Marca temporal" , "Fecha " , "Clase" , "Localizacion"]) #elimino las columnas Marca temporal, Fecha, Clase , y Localización del dataframe.
+          df3=df2.assign(Asistencia="Presente") #creo una nueva columna "Asistencia" con un valor Presente por defecto para todos los registros.
+          df3.to_csv('Asistencia.csv') #Genero un archivo csv.
+          archivo = open("/home/mariafernandez/Documentos/Asistencia.csv","rb") #importo el archivo
+          bot.send_document(message.chat.id, archivo, caption="El listado de Asistencia de la fecha %s está listo." %format) #envio el archivo al chat del profesor.
+          bot.send_message(message.chat.id, "Me alegra haberte ayudado. Muchas gracias por usar Bot Asist")
+          
+       else: 
+          #Si no es el profesor el que solicita el archivo, mostrará este mensaje.
+          bot.send_message(message.chat.id, "No estas habilitado para usar este comando.")
+          bot.send_message(messae.chat.id, "Para volver al principio, haz click en el siguiente comando: /Volver")
+    
+if __name__ == '__main__':
+    print('Iniciando el bot') #mensaje en consola cuando inicia el bot.
+    bot.infinity_polling()    #función que se encarga de estar constantemente controlando si se reciben nuevos mensajes.
+    print('Fin')
+    
